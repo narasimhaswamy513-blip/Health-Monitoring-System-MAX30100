@@ -1,0 +1,156 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <title>Health Graph</title>
+  <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+
+  <style>
+    body {
+      background: #f5f5f5;
+      font-family: Arial;
+    }
+
+    h2 {
+      margin-left: 20px;
+    }
+
+    .chart-box {
+      width: 90%;
+      margin: 20px auto;
+      background: white;
+      padding: 20px;
+      border-radius: 10px;
+    }
+
+    canvas {
+      width: 100% !important;
+      height: 300px !important;
+    }
+  </style>
+</head>
+
+<body>
+
+<h2>❤️ BPM Graph</h2>
+<div class="chart-box">
+  <canvas id="bpmChart"></canvas>
+</div>
+
+<h2>🫁 SpO2 Graph</h2>
+<div class="chart-box">
+  <canvas id="spo2Chart"></canvas>
+</div>
+
+<script>
+
+// BPM CHART
+const bpmChart = new Chart(document.getElementById('bpmChart'), {
+  type: 'line',
+  data: {
+    labels: [],
+    datasets: [{
+      label: 'BPM',
+      data: [],
+      borderColor: 'red',
+      borderWidth: 2,
+      tension: 0
+    }]
+  },
+  options: {
+    responsive: true,
+    maintainAspectRatio: false,
+    scales: {
+      y: {
+        min: 10,
+        max: 150
+      }
+    }
+  }
+});
+
+// SpO2 CHART
+const spo2Chart = new Chart(document.getElementById('spo2Chart'), {
+  type: 'line',
+  data: {
+    labels: [],
+    datasets: [{
+      label: 'SpO2',
+      data: [],
+      borderColor: 'blue',
+      borderWidth: 2,
+      tension: 0
+    }]
+  },
+  options: {
+    responsive: true,
+    maintainAspectRatio: false,
+    scales: {
+      y: {
+        min: 80,
+        max: 100
+      }
+    }
+  }
+});
+
+async function fetchData() {
+
+  const url = "https://firestore.googleapis.com/v1/projects/max30100values/databases/(default)/documents/healthHistory";
+
+  try {
+    const res = await fetch(url);
+    const data = await res.json();
+
+    let bpm = [], spo2 = [], time = [];
+
+    if (data.documents) {
+
+      data.documents.forEach(doc => {
+
+        let b = doc.fields.bpm?.doubleValue || doc.fields.bpm?.integerValue;
+        let s = doc.fields.spo2?.doubleValue || doc.fields.spo2?.integerValue;
+        let t = doc.fields.time?.integerValue;
+
+        // Ignore bad data
+        if (b !== undefined && s !== undefined && t !== undefined) {
+          bpm.push(parseFloat(b));
+          spo2.push(parseFloat(s));
+          time.push(parseInt(t));
+        }
+      });
+
+      // SORT BY TIME
+      let combined = time.map((t, i) => ({
+        t,
+        b: bpm[i],
+        s: spo2[i]
+      }));
+
+      combined.sort((a, b) => a.t - b.t);
+
+      let labels = combined.map(x => x.t);
+
+      // UPDATE BPM
+      bpmChart.data.labels = labels;
+      bpmChart.data.datasets[0].data = combined.map(x => x.b);
+      bpmChart.update();
+
+      // UPDATE SpO2
+      spo2Chart.data.labels = labels;
+      spo2Chart.data.datasets[0].data = combined.map(x => x.s);
+      spo2Chart.update();
+    }
+
+  } catch (err) {
+    console.log("Error:", err);
+  }
+}
+
+// Refresh every 5 seconds
+setInterval(fetchData, 5000);
+fetchData();
+
+</script>
+
+</body>
+</html>
